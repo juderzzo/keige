@@ -21,6 +21,13 @@ TEAMS = {
     597089: "Wooster Fighting Scots",
 }
 
+
+roster_url = "https://stats.ncaa.org/teams/{team_id}/roster"
+# TODO: Make a function to get the pitcher and which side they are pitching from on each team. We can also use this to get the full names of each player from each of the games to standardize them on the csv
+
+#Get the starting pitcher for each team here: 
+individual_stats_url = "https://stats.ncaa.org/contests/{game_id}/individual_stats"
+
 # Define headers to mimic a browser
 HEADERS = {
     "Host": "stats.ncaa.org",
@@ -349,24 +356,53 @@ def get_team_stats(team_id, game_ids=[]):
             continue
             
 
-# Helper function to get runner description string
-def get_runners_description(first, second, third):
-    if not (first or second or third):
-        return "Empty"
+def get_team_roster(team_id):
+    url = f"https://stats.ncaa.org/teams/{team_id}/roster"
+    response = requests.get(url, headers=HEADERS)
+    html_content = response.text
+    soup = BeautifulSoup(html_content, "html.parser")
+    roster_table = soup.find('table', id="rosters_form_players_16840_data_table")
+    # Find all player links
+    player_rows = roster_table.find_all('tr')
+    player_ids = []
+    player_data = []
+    for row in player_rows:
+        print("Found a row in player rows")
+        cells = row.find_all('td')
+        if len(cells) > 0 and row.find('a'):
+            link = row.find('a')['href']
+            player_id = re.search(r'/players/(\d+)', link).group(1) if re.search(r'/players/(\d+)', link) else ""
+            
+            # Extract data from table cells
+            player_info = {
+                'id': player_id,
+                'number': cells[2].text.strip() if len(cells) > 2 else "",
+                'name': cells[3].text.strip() if len(cells) > 3 else "",
+                'position': cells[5].text.strip() if len(cells) > 5 else "",
+                'height': cells[6].text.strip() if len(cells) > 6 else "",
+                'bats': cells[7].text.strip() if len(cells) > 7 else "",
+                'throws': cells[8].text.strip() if len(cells) > 8 else ""
+            }
+            
+            player_ids.append(player_id)
+            player_data.append(player_info)
+            print(f"Player: {player_info}")
     
-    runners = []
-    if first:
-        runners.append("1B")
-    if second:
-        runners.append("2B")
-    if third:
-        runners.append("3B")
+    # Create players directory if it doesn't exist
+    os.makedirs('players', exist_ok=True)
     
-    return ", ".join(runners)
+    # Convert player data to DataFrame and save to CSV
+    players_df = pd.DataFrame(player_data)
+    csv_path = f"players/team_{team_id}_players.csv"
+    players_df.to_csv(csv_path, index=False)
+    print(f"Saved roster to {csv_path}")
+            
+    return player_data
+    
 
 # This function would call GPT to analyze the play and update state
 
 if __name__ == "__main__":
 
-    get_team_stats(TEAM_ID)
-
+    # get_team_stats(TEAM_ID)
+    get_team_roster(TEAM_ID)
